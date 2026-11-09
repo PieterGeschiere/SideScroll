@@ -5,6 +5,8 @@ const path = require('path');
 const cfg = require('./lib/config');
 const { createRail } = require('./lib/rail');
 const { createVideoMode } = require('./lib/video-mode');
+const { guardNavigation } = require('./lib/navigation-guard');
+const { attachShortcuts } = require('./lib/shortcuts');
 const { PAUSE_ALL_JS } = require('./lib/page-core');
 const sites = require('./sites');
 
@@ -25,6 +27,8 @@ const views = {}; // site name -> WebContentsView (created lazily)
 let activeName = null;
 let zoom = cfg.DEFAULT_ZOOM;
 let volume = 1;
+
+const loadUrl = (wc, url) => wc.loadURL(url, { userAgent: cfg.IPHONE_UA });
 
 const rail = createRail(() => win);
 const vm = createVideoMode({
@@ -48,6 +52,11 @@ function setVolume(v) {
   rail.send('volume-changed', volume);
 }
 
+function setZoom(z) {
+  zoom = Math.max(cfg.ZOOM_MIN, Math.min(cfg.ZOOM_MAX, z));
+  for (const v of Object.values(views)) v.webContents.setZoomFactor(zoom);
+}
+
 function goBack() {
   const view = views[activeName];
   if (!view) return;
@@ -68,23 +77,9 @@ function createView(name) {
   });
   const wc = view.webContents;
   wc.setUserAgent(cfg.IPHONE_UA);
-  const load = (url) => wc.loadURL(url, { userAgent: cfg.IPHONE_UA });
+  const load = (url) => loadUrl(wc, url);
 
-  // ---- URL whitelist -------------------------------------------------------
-  const guard = (event, url) => {
-    if (!cfg.isAllowedUrl(url)) {
-      console.log(`[${name}] BLOCKED navigation:`, url);
-      event.preventDefault();
-    }
-  };
-  wc.on('will-navigate', guard);
-  wc.on('will-redirect', guard);
-  // Links that want a new window: open allowed ones in-place, drop the rest.
-  wc.setWindowOpenHandler(({ url }) => {
-    if (cfg.isAllowedUrl(url)) load(url);
-    else console.log(`[${name}] BLOCKED popup:`, url);
-    return { action: 'deny' };
-  });
+  guardNavigation(wc, name, load);
 
   // ---- Logging -------------------------------------------------------------
   wc.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
@@ -101,47 +96,23 @@ function createView(name) {
     wc.insertCSS(cfg.SCROLLBAR_CSS).catch(() => {});
   });
 
-  // ---- Keyboard shortcuts --------------------------------------------------
-  wc.on('before-input-event', (e, input) => {
-    if (input.type !== 'keyDown') return;
-    if (input.alt && input.key === 'ArrowLeft') {
-      e.preventDefault();
-      goBack();
-      return;
-    }
-    if (!input.control) return;
-    if (input.key === 'ArrowUp' || input.key === 'ArrowDown') {
-      e.preventDefault();
-      setVolume(volume + (input.key === 'ArrowUp' ? 0.1 : -0.1));
-      return;
-    }
-    if (input.shift && input.key.toLowerCase() === 'v') {
-      e.preventDefault();
-      vm.toggle();
-      return;
-    }
-    if (input.key === '=' || input.key === '+') zoom = Math.min(1.5, zoom + 0.1);
-    else if (input.key === '-') zoom = Math.max(0.3, zoom - 0.1);
-    else if (input.key === '0') zoom = cfg.DEFAULT_ZOOM;
-    else return;
-    e.preventDefault();
-    for (const v of Object.values(views)) v.webContents.setZoomFactor(zoom);
+  attachShortcuts(wc, {
+    goBack,
+    changeVolume: (dir) => setVolume(volume + dir * cfg.VOLUME_STEP),
+    toggleVideoMode: () => vm.toggle(),
+    zoomIn: () => setZoom(zoom + cfg.ZOOM_STEP),
+    zoomOut: () => setZoom(zoom - cfg.ZOOM_STEP),
+    zoomReset: () => setZoom(cfg.DEFAULT_ZOOM),
   });
 
   // ---- Per-site page handling (the site module decides what a page means) ---
-  let lastBounce = 0;
   const onPage = (url) => {
     if (views[activeName] !== view) return;
     let u;
     try { u = new URL(url); } catch { return; }
-    if (!u.hostname.endsWith(site.hostSuffix)) return; // e.g. a sign-in provider page
+    if (!cfg.hostMatches(u.hostname, site.hostSuffix)) return; // e.g. a sign-in provider page
     const c = site.classify(u);
     if (!c) return; // this site has no automatic video-only mode
-    if (c.bounce && Date.now() - lastBounce > 4000) {
-      lastBounce = Date.now();
-      load(site.home);
-      return;
-    }
     if (c.video) {
       if (!vm.isActive() && !vm.isSuppressed()) vm.autoEnter(view);
     } else {
@@ -169,7 +140,7 @@ function switchTo(name) {
   // Clicking the already-active site = go to its home page (escape hatch).
   if (activeName === name && views[name]) {
     if (vm.isActive()) vm.exit();
-    views[name].webContents.loadURL(site.home, { userAgent: cfg.IPHONE_UA });
+    loadUrl(views[name].webContents, site.home);
     return;
   }
   // Video-only mode belongs to one site's page: leave it (in the old view) before switching.
@@ -228,7 +199,7 @@ ipcMain.on('open-login', () => {
   if (!view || !site) return;
   vm.setSuppressed(true);
   if (vm.isActive()) vm.exit();
-  view.webContents.loadURL(site.login, { userAgent: cfg.IPHONE_UA });
+  loadUrl(view.webContents, site.login);
 });
 
 // Site-specific main-process hooks (e.g. YouTube's 'swipe' request).

@@ -5,7 +5,7 @@ TikTok and Instagram. The owner uses it to scroll short-form video in a very sma
 window (default 190x340, as small as ~90x70). Everything is judged by how well it
 works at tiny sizes and with video only, no surrounding page chrome.
 
-Run: `npm start` (Electron ^33). Windows 11, PowerShell/Git Bash.
+Run: `npm start` (Electron ^45). Windows 11, PowerShell/Git Bash.
 If `npm start` crashes with `Cannot read properties of undefined (reading 'commandLine')`
 the shell has `ELECTRON_RUN_AS_NODE=1` set (the VS Code extension does this):
 unset it first (`$env:ELECTRON_RUN_AS_NODE=$null` / `unset ELECTRON_RUN_AS_NODE`).
@@ -28,6 +28,8 @@ unset it first (`$env:ELECTRON_RUN_AS_NODE=$null` / `unset ELECTRON_RUN_AS_NODE`
 ```
 main.js              entry + wiring only: app switches, window, views, IPC, switchTo
 lib/config.js        constants (UA, partition, sizes, whitelist, scrollbar css)
+lib/navigation-guard.js  URL whitelist hooks for a site view (navigate/redirect/popup)
+lib/shortcuts.js     keyboard shortcuts (back, volume, video-only, zoom)
 lib/rail.js          control panel window (separate hovering window, drag, expand)
 lib/video-mode.js    video-only mode, main side (enter/exit/auto/aspect lock). Site-agnostic.
 lib/page-core.js     video-only mode, page side core + shared page snippets. Site-agnostic.
@@ -47,7 +49,7 @@ index.html, renderer.js   the rail UI (SVG icons, vertical volume slider, sign-i
   local files). Each preload file guards on its own hostname. Add new ones to `PRELOADS`.
 - A site module exports: `name`, `hostSuffix`, `home`, `login`, `lockAspect`,
   `videoStrategy` (page-side source, contract in `lib/page-core.js`),
-  `classify(url) -> {video, bounce} | null` (null = no automatic video-only mode),
+  `classify(url) -> {video} | null` (null = no automatic video-only mode),
   optional `setupMain({ipcMain, viewFromSender})`.
 - To add a site: create `sites/<name>.js`, add to `sites/index.js`, add the domain to
   `ALLOWED_DOMAINS`, optionally `preload/<name>.js` + `PRELOADS`, and a button in the rail.
@@ -137,20 +139,16 @@ index.html, renderer.js   the rail UI (SVG icons, vertical volume slider, sign-i
   page lists "Reject all" FIRST and "Accept all" second (form flag `set_eom=false` = accept);
   TikTok's banner is a `tiktok-cookie-banner` custom element with its buttons in a shadow root.
   Neither consent screen showed up in clean-session probes from the owner's region.
-- UNRESOLVED (found last): in my runs the YouTube view fires `render-process-gone: crashed`
-  a few seconds after launch, even with zero preloads and a fresh session, while a bare
-  Electron window loading m.youtube.com in the same UA is fine (so it is something in the
-  app's view setup, or the machine state after the laptop crash). The full regression passed
-  earlier the same day. Bisect next: view options (`backgroundThrottling:false`, sandbox),
-  `setZoomFactor`/`insertCSS` on dom-ready, the Chromium switches in `main.js`
-  (`disable-renderer-backgrounding`, `disable-backgrounding-occluded-windows`,
-  `CalculateNativeWinOcclusion`, `HardwareMediaKeyHandling`).
+- RESOLVED: the YouTube view's `render-process-gone: crashed` was a test artefact. It only
+  appears when `timeout` kills the app; with a graceful quit (`app.quit()` after 20s) there is no
+  crash. In smoke runs ignore that line, or quit gracefully.
 - TikTok scrolling and video-only. Probed: the mobile page has a single `<video>`; wheel,
   ArrowDown and touch swipes did nothing. Needs investigation of TikTok's next-video
   mechanism; then fill in `sites/tiktok.js` (+ `preload/tiktok.js`), `classify`.
 - Unverified by me: real window dragging by the grip, long-session stability.
 
 ## Testing (what actually works)
+- Lint + unit tests: `npm run check` (ESLint, `eslint.config.js`; CI in `.github/workflows/ci.yml`). Unit tests: `npm test` (node:test, `test/`): whitelist, site classify(), video-mode window fit, strategy compile.
 - Syntax: `for f in main.js lib/*.js sites/*.js preload/*.js renderer.js; do node --check $f; done`.
 - Smoke launch: `(unset ELECTRON_RUN_AS_NODE; timeout 12 npx electron .)`; cache errors in
   output are harmless if another instance is running.

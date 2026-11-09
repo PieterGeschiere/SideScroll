@@ -1,6 +1,14 @@
 // Instagram-only page behaviour (see also sites/instagram.js).
 (function () {
-  if (!location.hostname.endsWith('instagram.com')) return;
+  // Timings (ms)
+  const STEP_COOLDOWN = 600; // ignore steps closer together than this
+  const RELOAD_GAP_END = 20000; // min gap between end-of-feed reloads
+  const RELOAD_GAP_RESIZE = 8000; // min gap between resize reloads
+  const RESIZE_SETTLE = 700; // wait for a resize to stop before reloading
+  const RESIZE_ARM_DELAY = 4000; // ignore resizes while the app applies page zoom
+  const AFTER_RELOAD_STEP_DELAY = 1500; // let autoplay / video-only mode settle
+
+  if (location.hostname !== 'instagram.com' && !location.hostname.endsWith('.instagram.com')) return;
   const onReels = () => location.pathname.startsWith('/reel');
 
   // ---- Reloading the feed (workarounds for two Instagram quirks, below) -------------
@@ -15,14 +23,14 @@
       const t = Number(sessionStorage.getItem(k) || 0);
       if (Date.now() - t < gapMs) return false;
       sessionStorage.setItem(k, String(Date.now()));
-    } catch (e) {}
+    } catch (e) { /* sessionStorage blocked: skip the rate limit */ }
     return true;
   }
   function reloadFeed(advance) {
     try {
       sessionStorage.setItem('__sv_goreels', '1');
       if (advance) sessionStorage.setItem('__sv_adv', '1');
-    } catch (e) {}
+    } catch (e) { /* sessionStorage blocked: reload without the flags */ }
     location.href = location.origin + '/';
   }
 
@@ -39,7 +47,7 @@
     Math.max(0, Math.min(innerWidth, r.right) - Math.max(0, r.left));
   function step(dir) {
     const now = Date.now();
-    if (now - last < 600) return;
+    if (now - last < STEP_COOLDOWN) return;
     last = now;
     const vids = [...document.querySelectorAll('video')];
     if (!vids.length) return;
@@ -66,7 +74,7 @@
     // End of the loaded reels: Instagram does not fetch more here, so you would get stuck.
     // Restart the feed (fresh reels) and step forward once it is back.
     if (dir > 0 && !target) {
-      if (mayReload('end', 20000)) reloadFeed(true);
+      if (mayReload('end', RELOAD_GAP_END)) reloadFeed(true);
       return;
     }
     // Line the target up with the top of the feed (exact, so nothing accumulates).
@@ -83,7 +91,7 @@
       adv = sessionStorage.getItem('__sv_adv') === '1';
       sessionStorage.removeItem('__sv_goreels');
       sessionStorage.removeItem('__sv_adv');
-    } catch (e) {}
+    } catch (e) { /* sessionStorage blocked: nothing to resume */ }
     if (!goReels) return;
     let tries = 0, clicked = false, stepped = false;
     const t = setInterval(() => {
@@ -99,7 +107,7 @@
           stepped = true;
           clearInterval(t);
           last = 0;
-          setTimeout(() => step(1), 1500); // let autoplay / video-only mode settle first
+          setTimeout(() => step(1), AFTER_RELOAD_STEP_DELAY); // let autoplay / video-only mode settle first
         }
       }
     }, 300);
@@ -112,7 +120,7 @@
   // Resizes in the first seconds are the app applying its page zoom while the page loads:
   // just remember the size, do not reload for them.
   let lastW = innerWidth, lastH = innerHeight, resizeTimer = 0;
-  const armedAt = Date.now() + 4000;
+  const armedAt = Date.now() + RESIZE_ARM_DELAY;
   window.addEventListener('resize', () => {
     if (Date.now() < armedAt) {
       lastW = innerWidth;
@@ -123,8 +131,8 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (Math.abs(innerWidth - lastW) < 4 && Math.abs(innerHeight - lastH) < 4) return;
-      if (mayReload('resize', 8000)) reloadFeed(false);
-    }, 700);
+      if (mayReload('resize', RELOAD_GAP_RESIZE)) reloadFeed(false);
+    }, RESIZE_SETTLE);
   });
 
   // ---- Guest wall ----------------------------------------------------------------------

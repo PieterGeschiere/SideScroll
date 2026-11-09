@@ -2,7 +2,7 @@
 const { ipcRenderer } = require('electron');
 
 (function () {
-  if (!location.hostname.endsWith('youtube.com')) return;
+  if (location.hostname !== 'youtube.com' && !location.hostname.endsWith('.youtube.com')) return;
 
   // The mobile Shorts player only reacts to swipes / arrow keys. Turn the mouse wheel
   // into a next/prev request; main.js (sites/youtube.js) presses Down/Up.

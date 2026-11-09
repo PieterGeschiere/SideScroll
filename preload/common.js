@@ -6,7 +6,7 @@ const { ipcRenderer, webFrame } = require('electron');
 //    so make the page believe it is always visible and focused. This must run in the
 //    page's own world (a preload runs in an isolated world).
 webFrame.executeJavaScript(`(() => {
-  const def = (k, val) => { try { Object.defineProperty(Document.prototype, k, { configurable: true, get: () => val }); } catch (e) {} };
+  const def = (k, val) => { try { Object.defineProperty(Document.prototype, k, { configurable: true, get: () => val }); } catch (e) { /* property not configurable: ignore */ } };
   def('hidden', false);
   def('webkitHidden', false);
   def('visibilityState', 'visible');
