@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'" />
+  <title>SideScroll</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: system-ui, "Segoe UI", sans-serif;
+      user-select: none;
+    }
+    /* A small panel window hovering beside the video. Collapsed it is just the
+       grip tab; main.js widens the window on hover. */
+    #rail {
+      box-sizing: border-box;
+      display: flex;
+      width: 100%;
+      height: 100%;
+      background: rgba(24, 24, 28, 0.85);
+      border-radius: 0 9px 9px 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-left: 0;
+    }
+    /* Panel on the left of the window: mirror it so the grip hugs the window. */
+    body.left #rail {
+      flex-direction: row-reverse;
+      border-radius: 9px 0 0 9px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-right: 0;
+    }
+    body:not(.expanded) #rail { background: rgba(24, 24, 28, 0.55); }
+    #grip {
+      flex: none;
+      width: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+    }
+    #grip i {
+      width: 3px;
+      height: 22px;
+      max-height: 60%;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+    #grip:hover i { background: rgba(255, 255, 255, 0.8); }
+    .items {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 0;
+      overflow-y: auto;
+    }
+    .items::-webkit-scrollbar { width: 0; }
+    body:not(.expanded) .items { visibility: hidden; }
+    button {
+      flex: none;
+      width: 28px;
+      padding: 4px 0;
+      border: 0;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.75);
+      background: rgba(255, 255, 255, 0.09);
+      cursor: pointer;
+    }
+    button svg { display: block; margin: 0 auto; }
+    button:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+    button.active { background: rgba(255, 255, 255, 0.9); color: #111; }
+    #close:hover { background: #e5484d; color: #fff; }
+    .vm-only { display: none; }
+    body.vm .vm-only { display: block; }
+    #vol {
+      flex: none;
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 18px;
+      height: 70px;
+      margin: 2px 0;
+      accent-color: rgba(255, 255, 255, 0.85);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="rail">
+    <div id="grip" title="Drag to move"><i></i></div>
+    <div class="items">
+      <button id="close" title="Close"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      <button id="back" title="Back (Alt+Left)"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg></button>
+      <button data-view="youtube" title="YouTube">YT</button>
+      <button data-view="tiktok" title="TikTok">TT</button>
+      <button data-view="instagram" title="Instagram">IG</button>
+      <button id="login" title="Sign in to this site"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.6"/><path d="M2.8 13.5c.6-2.6 2.6-4 5.2-4s4.6 1.4 5.2 4"/></svg></button>
+      <button id="play" title="Play / pause"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3.5v9l7-4.5z" fill="currentColor"/><path d="M13 3.5v9"/></svg></button>
+      <button id="exit" class="vm-only" title="Show full page"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/></svg></button>
+      <input id="vol" type="range" min="0" max="100" value="100" title="Volume (Ctrl+Up/Down)" />
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

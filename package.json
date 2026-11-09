@@ -1,0 +1,12 @@
+{
+  "name": "sidescroll",
+  "version": "1.0.0",
+  "description": "Floating always-on-top mini-browser for YouTube, TikTok and Instagram",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}
